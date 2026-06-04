@@ -282,6 +282,54 @@ let alertsDone = load(ALERT_KEY, {});
 let editingIndex = null;
 let audioCtx = null;
 
+/* CONTROLE DE ADMINISTRADOR
+   Visitantes apenas visualizam.
+   Para editar, clique na logo ou no relógio e informe a senha.
+*/
+let isAdmin = false;
+let adminTimer = null;
+const ADMIN_PASSWORD = "Netplace2026";
+
+function setAdminMode(active){
+  isAdmin = active;
+
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.style.display = isAdmin ? 'grid' : 'none';
+  });
+
+  const addButton = document.getElementById('addBtn') || document.querySelector('.add-btn');
+  if(addButton){
+    addButton.style.display = isAdmin ? 'grid' : 'none';
+  }
+}
+
+function adminLogin(){
+  const senha = prompt("Digite a senha de administrador:");
+
+  if(!senha) return;
+
+  if(senha === ADMIN_PASSWORD){
+    setAdminMode(true);
+    alert("Modo administrador ativado.");
+
+    if(adminTimer) clearTimeout(adminTimer);
+
+    adminTimer = setTimeout(() => {
+      setAdminMode(false);
+      alert("Modo administrador encerrado.");
+    }, 15 * 60 * 1000);
+
+  }else{
+    alert("Senha incorreta.");
+  }
+}
+
+function requireAdmin(){
+  if(isAdmin) return true;
+  adminLogin();
+  return isAdmin;
+}
+
 /*
   CONFIGURAÇÃO SUPABASE
   1) Crie a tabela dashboard_config no Supabase.
@@ -446,7 +494,11 @@ function render(){
   updateLayout();
   const grid=document.getElementById('grid');
   grid.innerHTML = staff.map((a,i)=> cardHtml(a,i)).join('');
-  document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => openModal(Number(btn.dataset.i))));
+  document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => {
+    if(!requireAdmin()) return;
+    openModal(Number(btn.dataset.i));
+  }));
+  setAdminMode(isAdmin);
 }
 function cardHtml(a,i){
   const d = activeData(a);
@@ -617,6 +669,7 @@ function playFallbackBeep(){
 }
 
 function openModal(i){
+  if(!isAdmin) return;
   editingIndex=i; 
   const base=staff[i];
   const a=activeData(base);
@@ -680,6 +733,7 @@ function readMonthRows(){
   return schedule;
 }
 function saveModal(){
+  if(!isAdmin) return;
   if(editingIndex===null) return;
   const base = staff[editingIndex] || {};
   const today=todayKey();
@@ -689,6 +743,7 @@ function saveModal(){
   save(); closeModal(); render(); tick();
 }
 function addAgent(){
+  if(!requireAdmin()) return;
   staff.push({name:`Atendente ${staff.length+1}`,status:'atendimento',start:'07:00',end:'13:20',p1:'08:10',p2:'10:00',p3:'12:00',schedule:{}});
   save(); render(); tick();
 }
@@ -697,16 +752,47 @@ document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',
 monthPicker.addEventListener('change',()=>renderMonthRows());
 fillMonthBtn.addEventListener('click',()=>renderMonthRows(true));
 
-addBtn.addEventListener('click', addAgent);
+addBtn.addEventListener('click', () => {
+  if(!requireAdmin()) return;
+  addAgent();
+});
 saveBtn.addEventListener('click', saveModal);
 cancelBtn.addEventListener('click', closeModal);
-deleteBtn.addEventListener('click', ()=>{ if(editingIndex!==null && staff.length>1){staff.splice(editingIndex,1); save(); closeModal(); render(); tick();} });
+deleteBtn.addEventListener('click', ()=>{ 
+  if(!isAdmin) return;
+  if(editingIndex!==null && staff.length>1){
+    staff.splice(editingIndex,1); 
+    save(); 
+    closeModal(); 
+    render(); 
+    tick();
+  } 
+});
 modalBackdrop.addEventListener('click', e=>{ if(e.target===modalBackdrop) closeModal(); });
-window.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+const logoAdminTrigger = document.querySelector('.logo-box');
+if(logoAdminTrigger){
+  logoAdminTrigger.style.cursor = 'pointer';
+  logoAdminTrigger.title = 'Acesso administrador';
+  logoAdminTrigger.addEventListener('click', adminLogin);
+}
+
+const clockAdminTrigger = document.querySelector('.clock-wrap');
+if(clockAdminTrigger){
+  clockAdminTrigger.style.cursor = 'pointer';
+  clockAdminTrigger.title = 'Acesso administrador';
+  clockAdminTrigger.addEventListener('dblclick', adminLogin);
+}
+
+window.addEventListener('keydown', e=>{ 
+  if(e.key==='Escape') closeModal(); 
+  if(e.ctrlKey && e.altKey && e.key.toLowerCase()==='a') adminLogin();
+});
 window.addEventListener('resize', ()=>{ updateLayout(); });
 async function iniciarDashboard(){
   await loadCloud();
   render();
+  setAdminMode(false);
   tick();
   setInterval(tick,1000);
   // Atualiza automaticamente em outros computadores/TV a cada 10 segundos.
