@@ -284,11 +284,10 @@ let audioCtx = null;
 
 /* CONTROLE DE ADMINISTRADOR
    Visitantes apenas visualizam.
-   Para editar, clique na logo ou no relógio e informe a senha.
+   A senha de administrador agora fica salva no Supabase, na tabela system_config.
 */
 let isAdmin = false;
 let adminTimer = null;
-const ADMIN_PASSWORD = "Netplace2026";
 
 function setAdminMode(active){
   isAdmin = active;
@@ -303,30 +302,57 @@ function setAdminMode(active){
   }
 }
 
-function adminLogin(){
-  const senha = prompt("Digite a senha de administrador:");
+async function validarSenhaAdmin(senhaDigitada){
+  const client = getSupabaseClient();
 
-  if(!senha) return;
+  if(!client){
+    alert('Não foi possível conectar ao Supabase para validar a senha.');
+    return false;
+  }
 
-  if(senha === ADMIN_PASSWORD){
+  const { data, error } = await client
+    .from('system_config')
+    .select('valor')
+    .eq('chave', 'admin_password')
+    .single();
+
+  if(error || !data){
+    console.error('Erro ao validar senha de administrador:', error);
+    alert('Erro ao validar senha de administrador. Verifique se a tabela system_config foi criada no Supabase.');
+    return false;
+  }
+
+  return senhaDigitada === data.valor;
+}
+
+async function adminLogin(){
+  const senha = prompt('Digite a senha de administrador:');
+
+  if(!senha) return false;
+
+  const senhaCorreta = await validarSenhaAdmin(senha);
+
+  if(senhaCorreta){
     setAdminMode(true);
-    alert("Modo administrador ativado.");
+    alert('Modo administrador ativado.');
 
     if(adminTimer) clearTimeout(adminTimer);
 
     adminTimer = setTimeout(() => {
       setAdminMode(false);
-      alert("Modo administrador encerrado.");
+      alert('Modo administrador encerrado.');
     }, 15 * 60 * 1000);
 
-  }else{
-    alert("Senha incorreta.");
+    return true;
   }
+
+  alert('Senha incorreta.');
+  return false;
 }
 
-function requireAdmin(){
+async function requireAdmin(){
   if(isAdmin) return true;
-  adminLogin();
+  await adminLogin();
   return isAdmin;
 }
 
@@ -494,8 +520,8 @@ function render(){
   updateLayout();
   const grid=document.getElementById('grid');
   grid.innerHTML = staff.map((a,i)=> cardHtml(a,i)).join('');
-  document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => {
-    if(!requireAdmin()) return;
+  document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', async () => {
+    if(!(await requireAdmin())) return;
     openModal(Number(btn.dataset.i));
   }));
   setAdminMode(isAdmin);
@@ -742,8 +768,8 @@ function saveModal(){
   staff[editingIndex]={...base, name:fName.value.trim()||'Atendente', ...todayData, schedule};
   save(); closeModal(); render(); tick();
 }
-function addAgent(){
-  if(!requireAdmin()) return;
+async function addAgent(){
+  if(!(await requireAdmin())) return;
   staff.push({name:`Atendente ${staff.length+1}`,status:'atendimento',start:'07:00',end:'13:20',p1:'08:10',p2:'10:00',p3:'12:00',schedule:{}});
   save(); render(); tick();
 }
@@ -752,10 +778,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',
 monthPicker.addEventListener('change',()=>renderMonthRows());
 fillMonthBtn.addEventListener('click',()=>renderMonthRows(true));
 
-addBtn.addEventListener('click', () => {
-  if(!requireAdmin()) return;
-  addAgent();
-});
+addBtn.addEventListener('click', addAgent);
 saveBtn.addEventListener('click', saveModal);
 cancelBtn.addEventListener('click', closeModal);
 deleteBtn.addEventListener('click', ()=>{ 
