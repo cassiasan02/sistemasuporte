@@ -721,6 +721,54 @@ async function refreshFromCloud(){
     tick();
   }
 }
+
+/* ===== ATUALIZAÇÃO REMOTA EM TEMPO REAL =====
+   Quando qualquer administrador salvar uma alteração no Supabase,
+   todas as TVs/computadores conectados recebem a mudança automaticamente,
+   sem F5 e sem recarregar a página.
+*/
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
+
+function iniciarRealtime(){
+  const client = getSupabaseClient();
+  if(!client) return;
+
+  if(realtimeChannel){
+    try{ client.removeChannel(realtimeChannel); }catch(e){}
+  }
+
+  realtimeChannel = client
+    .channel('netplace-dashboard-realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'dashboard_config',
+        filter: `id=eq.${CLOUD_ID}`
+      },
+      async (payload) => {
+        console.log('Atualização remota recebida:', payload.eventType);
+
+        // Pequeno atraso para agrupar alterações muito rápidas.
+        clearTimeout(realtimeRefreshTimer);
+        realtimeRefreshTimer = setTimeout(async () => {
+          // Nunca sobrescreve uma edição que esteja sendo feita no popup.
+          if(modalBackdrop && modalBackdrop.style.display === 'flex') return;
+
+          const changed = await loadCloud();
+          if(changed){
+            render();
+            tick();
+          }
+        }, 250);
+      }
+    )
+    .subscribe((status) => {
+      console.log('Supabase Realtime:', status);
+    });
+}
 function toMin(t){ if(!/^\d{2}:\d{2}$/.test(t||'')) return null; const [h,m]=t.split(':').map(Number); return h*60+m; }
 function fmt(seconds){ seconds=Math.max(0,seconds|0); const h=Math.floor(seconds/3600); const m=Math.floor((seconds%3600)/60); const s=seconds%60; return `${pad(h)}:${pad(m)}:${pad(s)}`; }
 function statusLabel(s){ return ({aguardando:'Aguardando',atendimento:'Em atendimento',pausa:'Em pausa',descanso:'Descanso',finalizado:'Finalizado',folga:'Folga',ferias:'Férias'})[s]||'Em atendimento'; }
@@ -1046,8 +1094,12 @@ async function iniciarDashboard(){
   setAdminMode(false);
   tick();
   setInterval(tick,1000);
-  // Atualiza automaticamente em outros computadores/TV a cada 10 segundos.
-  setInterval(refreshFromCloud,10000);
+
+  // Atualização instantânea via Supabase Realtime.
+  iniciarRealtime();
+
+  // Fallback: se o Realtime perder conexão, ainda verifica a nuvem periodicamente.
+  setInterval(refreshFromCloud,60000);
 }
 
 iniciarDashboard();
