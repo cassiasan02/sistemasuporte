@@ -181,3 +181,16 @@
   .chart-fields .field-row{grid-template-columns:minmax(0,1fr)}
   .image-preview-list{grid-template-columns:repeat(auto-fill,minmax(78px,1fr))}
 }
+.crop-dialog{width:min(620px,calc(100% - 24px))}
+.crop-stage{width:100%;aspect-ratio:4/3;max-height:48vh;margin:0 auto 20px;overflow:hidden;border-radius:10px;background:#eef1f7;display:grid;place-items:center;cursor:crosshair;touch-action:manipulation}
+.crop-stage img{display:block;width:100%;height:100%;object-fit:cover;transform-origin:center;user-select:none;-webkit-user-drag:none}
+.crop-dialog .range-field{display:block;font-size:10px;color:#4f5b72;margin:14px 0}
+.crop-dialog .range-field span{float:right;color:#72809b;font-weight:700}
+.crop-dialog .range-field input{display:block;width:100%;margin-top:8px;accent-color:var(--blue)}
+.crop-preview{position:absolute;left:5px;bottom:5px;border:1px solid #fff;background:#142448db;color:#fff;padding:6px 9px;border-radius:6px;font-size:9px;font-weight:700;z-index:2}
+.upload-preview{isolation:isolate}
+.upload-preview>img{position:relative;z-index:0}
+.remove-preview{z-index:2}
+@media(max-width:520px){.crop-stage{max-height:38vh}.crop-dialog{padding:17px 14px}}
+.card-photo{position:relative;aspect-ratio:4/3;min-width:0;overflow:hidden;border-radius:8px;background:#f2f5fa}
+.card-gallery .card-photo .card-media{width:100%;height:100%;max-height:none;margin:0;object-fit:cover}

@@ -37,6 +37,8 @@
   let localSnapshot = null;
   let cloudMedia = new Map();
   let pendingImages = [];
+  let pendingImageSettings = [];
+  let cropIndex = -1;
   let deleteId = null;
   let saveTimer;
 
@@ -249,8 +251,8 @@
   const renderEntry = (entry, index) => {
     const theme = index % 2 ? { color: state.profile.pink } : { color: state.profile.blue };
     const tagTone = index % 2 ? 'pink' : '';
-    const images = (Array.isArray(entry.images) ? entry.images : (entry.image ? [entry.image] : [])).map(mediaSrc).filter(Boolean);
-    const gallery = images.length ? `<div class="card-gallery" aria-label="Fotos de ${escapeHTML(entry.title)}">${images.map((image, photoIndex) => `<img class="card-media" src="${image}" alt="Foto ${photoIndex + 1} de ${escapeHTML(entry.title)}" loading="lazy">`).join('')}</div>` : '';
+    const entryImages = Array.isArray(entry.images) ? entry.images : (entry.image ? [entry.image] : []);
+    const gallery = entryImages.length ? `<div class="card-gallery" aria-label="Fotos de ${escapeHTML(entry.title)}">${entryImages.map((value, photoIndex) => { const image = mediaSrc(value); const setting = { x: 50, y: 50, zoom: 1, ...(entry.imageSettings?.[photoIndex] || {}) }; return image ? `<div class="card-photo"><img class="card-media" src="${image}" alt="Foto ${photoIndex + 1} de ${escapeHTML(entry.title)}" style="object-fit:${setting.zoom < 1 ? 'contain' : 'cover'};object-position:${setting.x}% ${setting.y}%;transform:scale(${setting.zoom})" loading="lazy"></div>` : ''; }).join('')}</div>` : '';
     return `<article class="timeline-item" style="--node:${theme.color}"><time class="timeline-date" datetime="${escapeHTML(entry.date)}">${escapeHTML(dateText(entry.date))}</time><div class="timeline-card"><div class="card-head"><span class="category-tag ${tagTone}">${escapeHTML(entry.category || 'Conquista')}</span><div class="card-actions"><button class="icon-button edit-entry" data-id="${escapeHTML(entry.id)}" aria-label="Editar ${escapeHTML(entry.title)}" title="Editar">✎</button><button class="icon-button delete-entry" data-id="${escapeHTML(entry.id)}" aria-label="Remover ${escapeHTML(entry.title)}" title="Remover">⌫</button></div></div><h3>${escapeHTML(entry.title)}</h3>${entry.body ? `<div class="card-body">${entry.body}</div>` : ''}${gallery}${renderChart(entry)}</div></article>`;
   };
   const renderTimeline = () => {
@@ -317,11 +319,34 @@
     }).filter((point) => point.label && Number.isFinite(point.value));
     return values.length ? { type: $('#chart-type').value, values } : null;
   };
+  const currentImageSettings = (index) => ({ x: 50, y: 50, zoom: 1, ...(pendingImageSettings[index] || {}) });
   const renderImagePreviews = () => {
     const gallery = $('#image-preview-list');
-    gallery.innerHTML = pendingImages.map((image, index) => `<div class=\"upload-preview\"><img src=\"${mediaSrc(image)}\" alt=\"Foto ${index + 1}\"><button type=\"button\" class=\"remove-preview\" data-index=\"${index}\" aria-label=\"Remover foto ${index + 1}\">×</button></div>`).join('');
-    gallery.querySelectorAll('.remove-preview').forEach((button) => button.addEventListener('click', () => { pendingImages.splice(Number(button.dataset.index), 1); renderImagePreviews(); }));
+    gallery.innerHTML = pendingImages.map((image, index) => { const setting = currentImageSettings(index); return `<div class=\"upload-preview\"><img src=\"${mediaSrc(image)}\" alt=\"Foto ${index + 1}\" style=\"object-fit:${setting.zoom < 1 ? 'contain' : 'cover'};object-position:${setting.x}% ${setting.y}%;transform:scale(${setting.zoom})\"><button type=\"button\" class=\"remove-preview\" data-index=\"${index}\" aria-label=\"Remover foto ${index + 1}\">×</button><button type=\"button\" class=\"crop-preview\" data-index=\"${index}\">Ajustar corte</button></div>`; }).join('');
+    gallery.querySelectorAll('.remove-preview').forEach((button) => button.addEventListener('click', () => { const index = Number(button.dataset.index); pendingImages.splice(index, 1); pendingImageSettings.splice(index, 1); renderImagePreviews(); }));
+    gallery.querySelectorAll('.crop-preview').forEach((button) => button.addEventListener('click', () => openCrop(Number(button.dataset.index))));
     $('#image-count').textContent = `${pendingImages.length} foto${pendingImages.length === 1 ? '' : 's'} selecionada${pendingImages.length === 1 ? '' : 's'}`;
+  };
+  const updateCropPreview = () => {
+    const image = $('#crop-preview');
+    const zoom = Number($('#crop-zoom').value) / 100;
+    image.style.objectFit = zoom < 1 ? 'contain' : 'cover';
+    image.style.objectPosition = `${$('#crop-x').value}% ${$('#crop-y').value}%`;
+    image.style.transform = `scale(${zoom})`;
+    $('#crop-zoom-label').textContent = `${$('#crop-zoom').value}%`;
+    $('#crop-x-label').textContent = `${$('#crop-x').value}%`;
+    $('#crop-y-label').textContent = `${$('#crop-y').value}%`;
+  };
+  const openCrop = (index) => {
+    cropIndex = index; const setting = currentImageSettings(index);
+    $('#crop-preview').src = mediaSrc(pendingImages[index]);
+    $('#crop-x').value = setting.x; $('#crop-y').value = setting.y; $('#crop-zoom').value = Math.round(setting.zoom * 100);
+    updateCropPreview(); $('#crop-dialog').showModal();
+  };
+  const saveCrop = () => {
+    if (cropIndex < 0 || !pendingImages[cropIndex]) return;
+    pendingImageSettings[cropIndex] = { x: Number($('#crop-x').value), y: Number($('#crop-y').value), zoom: Number($('#crop-zoom').value) / 100 };
+    $('#crop-dialog').close(); renderImagePreviews(); cropIndex = -1;
   };
   const openEntry = (id = null) => {
     const entry = id ? state.entries.find((item) => item.id === id) : null;
@@ -337,6 +362,7 @@
     $('#chart-type').value = entry?.chart?.type || 'bar';
     $('#chart-data').value = entry?.chart?.values?.map((point) => `${point.label}, ${point.value}`).join('\n') || '';
     pendingImages = (Array.isArray(entry?.images) ? entry.images : (entry?.image ? [entry.image] : [])).slice();
+    pendingImageSettings = pendingImages.map((_, index) => ({ x: 50, y: 50, zoom: 1, ...(entry?.imageSettings?.[index] || {}) }));
     $('#entry-image').value = '';
     renderImagePreviews();
     $('#entry-dialog').showModal();
@@ -419,6 +445,9 @@
     });
     $('#search').addEventListener('input', renderTimeline);
     $('#chart-enabled').addEventListener('change', () => { $('#chart-fields').hidden = !$('#chart-enabled').checked; });
+    ['#crop-x', '#crop-y', '#crop-zoom'].forEach((selector) => $(selector).addEventListener('input', updateCropPreview));
+    $('#crop-stage').addEventListener('click', (event) => { const box = event.currentTarget.getBoundingClientRect(); $('#crop-x').value = Math.round((event.clientX - box.left) / box.width * 100); $('#crop-y').value = Math.round((event.clientY - box.top) / box.height * 100); updateCropPreview(); });
+    $('#crop-save').addEventListener('click', saveCrop);
     document.querySelectorAll('.close-dialog').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
     document.querySelectorAll('dialog').forEach((dialog) => dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); }));
     document.querySelectorAll('.rich-toolbar button').forEach((button) => button.addEventListener('click', () => { $('#entry-body').focus(); document.execCommand(button.dataset.cmd, false); }));
@@ -427,7 +456,7 @@
       const accepted = files.filter((file) => file.size <= 6 * 1024 * 1024);
       if (accepted.length !== files.length) toast('Cada foto deve ter até 6 MB.');
       const loaded = await Promise.all(accepted.map((file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); })));
-      pendingImages.push(...loaded); renderImagePreviews(); event.target.value = '';
+      pendingImages.push(...loaded); pendingImageSettings.push(...loaded.map(() => ({ x: 50, y: 50, zoom: 1 }))); renderImagePreviews(); event.target.value = '';
     });
     $('#entry-form').addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -436,7 +465,7 @@
       const chart = parseChart();
       if ($('#chart-enabled').checked && !chart) { toast('Adicione pelo menos um par de rótulo e valor para o gráfico.'); return; }
       const nextOrder = existing?.order_index ?? (state.entries.reduce((max, item) => Math.max(max, Number.isFinite(item.order_index) ? item.order_index : -1), -1) + 1);
-      const entry = { id, order_index: nextOrder, title: $('#entry-title').value.trim(), date: $('#entry-year').value, category: $('#entry-category').value, body: cleanRichText($('#entry-body').innerHTML).trim(), images: pendingImages, chart, updatedAt: Date.now() };
+      const entry = { id, order_index: nextOrder, title: $('#entry-title').value.trim(), date: $('#entry-year').value, category: $('#entry-category').value, body: cleanRichText($('#entry-body').innerHTML).trim(), images: pendingImages, imageSettings: pendingImageSettings, chart, updatedAt: Date.now() };
       if (existing) state.entries = state.entries.map((item) => item.id === id ? entry : item); else state.entries.push(entry);
       $('#entry-dialog').close(); renderTimeline(); persist(); toast(existing ? 'Conquista atualizada.' : 'Conquista adicionada à linha do tempo.');
     });
