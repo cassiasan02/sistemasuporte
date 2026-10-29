@@ -1,0 +1,34 @@
+NETPLACE · PAINEL COMPARTILHADO
+
+COMO FUNCIONA O ACESSO
+O mesmo endereço do site serve para todos:
+- Visitantes abrem o painel em modo de apresentação, sem botões de edição.
+- A equipe clica no pequeno ícone de cadeado no topo e entra com e-mail e senha.
+- Depois do login, o painel libera a edição nessa mesma página. Ao clicar em Sair, volta à apresentação.
+
+CONFIGURAÇÃO DO SUPABASE (FAÇA UMA VEZ)
+1. Entre no projeto Supabase associado ao painel.
+2. Abra SQL Editor > New query.
+3. Abra configurar-supabase.sql, copie todo o conteúdo, cole na consulta e clique em Run.
+   O script cria a tabela do painel, as permissões para usuários autenticados e o bucket privado das imagens.
+4. Para que visitantes vejam os dados e imagens, abra habilitar-visitantes.sql, copie o conteúdo no SQL Editor e clique em Run.
+5. Em Authentication > Settings, desative “Allow new users to sign up”.
+6. Em Authentication > Users, use Add user para criar uma conta para você. Crie contas somente para pessoas autorizadas da equipe.
+
+PUBLICAR OU ATUALIZAR NO VERCEL
+1. Extraia netplace-timeline.zip.
+2. Envie os arquivos extraídos para o repositório do GitHub (index.html, app.js, cloud-config.js, styles.css, logo e arquivos SQL/instruções). Mantenha os arquivos na pasta principal do projeto.
+3. Faça o commit das alterações no GitHub. O Vercel publica a atualização automaticamente.
+4. No Supabase, abra Authentication > URL Configuration e confirme que a URL do site está cadastrada como Site URL e também entre as Redirect URLs permitidas.
+5. Compartilhe o endereço normal do site, sem acrescentar nenhum parâmetro.
+
+DADOS ANTIGOS
+Se já há dados no Supabase, eles continuam sendo carregados sem precisar importar novamente. Se ainda precisa migrar conteúdo de um painel antigo, entre pela área da equipe, use Exportar dados no painel antigo e importe o arquivo JSON após fazer login no novo painel.
+
+SALVAMENTO E VISIBILIDADE
+As alterações feitas pela equipe sincronizam com o Supabase e aparecem para visitantes após recarregar a página. É necessária conexão com a internet. O JSON exportado é uma cópia de segurança; guarde-o em local seguro. A chave publishable incluída no site é própria para uso no navegador; nunca coloque uma chave Secret/service_role no site.
+
+ATENÇÃO: habilitar-visitantes.sql permite que qualquer pessoa que tenha o endereço veja todo o conteúdo do painel e as imagens, inclusive métricas e textos. Visitantes não podem editar. Não coloque informações confidenciais na dashboard.
+
+ATUALIZAÇÕES RECENTES
+As conquistas exibem e solicitam somente o ano. Cada card aceita várias fotos; elas são organizadas automaticamente em uma grade que se ajusta à tela. As imagens antigas de uma foto continuam compatíveis.
